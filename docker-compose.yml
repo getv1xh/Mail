@@ -17,7 +17,7 @@ services:
 
   # 2. Stalwart Mail Server
   stalwart:
-    image: stalwartlabs/mail-server:latest
+    image: stalwartlabs/stalwart:latest
     container_name: vmailx-stalwart
     ports:
       - "25:25"     # SMTP
