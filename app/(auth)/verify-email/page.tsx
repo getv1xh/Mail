@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Loader2, Mail, XCircle } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -110,5 +110,13 @@ export default function VerifyEmailPage() {
         Return to Sign In
       </Button>
     </div>
+  );
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<div className="w-full text-center"><Loader2 className="w-12 h-12 text-primary animate-spin mx-auto mb-6" /></div>}>
+      <VerifyEmailContent />
+    </Suspense>
   );
 }

@@ -15,7 +15,7 @@ export async function GET(
 
     const invitation = await invitationService.getInvitationByToken(token);
     
-    logRequest(log, { userId: "guest", workspaceId: "none", role: "none", path: req.nextUrl.pathname }, 200, start);
+    logRequest(log, { userId: "guest", workspaceId: "none" }, 200, start);
     
     return NextResponse.json({
       email: invitation.email,

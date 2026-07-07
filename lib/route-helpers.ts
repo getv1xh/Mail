@@ -34,13 +34,15 @@ export async function requireSession(req: NextRequest) {
  */
 export function buildRequestContext(
   req: NextRequest,
-  session: { user: { id: string } }
+  session: { user: { id: string } },
+  overrides?: Partial<RequestContext>
 ): RequestContext {
   return {
     requestId:
       req.headers.get("x-request-id") ?? crypto.randomUUID(),
     workspaceId: req.headers.get("x-workspace-id") ?? "",
     userId: session.user.id,
+    ...overrides,
   };
 }
 

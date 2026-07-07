@@ -7,7 +7,6 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSessionFromRequest } from "better-auth/next-js";
 import { auth } from "@/lib/auth";
 
 // Routes that don't require authentication

@@ -89,7 +89,7 @@ export class InvitationService {
   /**
    * Retrieve an invitation by its token.
    */
-  async getInvitationByToken(token: string): Promise<Invitation> {
+  async getInvitationByToken(token: string) {
     const invitation = await this.db.invitation.findUnique({
       where: { token },
       include: { workspace: true },

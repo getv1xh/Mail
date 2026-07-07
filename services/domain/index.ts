@@ -27,9 +27,7 @@ export interface AddDomainInput {
   domain: string;
 }
 
-export interface DomainWithRecords extends Domain {
-  dkimPrivateKey?: never; // never expose the private key
-}
+export type DomainWithRecords = Omit<Domain, "dkimPrivateKey">;
 
 export interface DnsVerificationResult {
   domain: string;

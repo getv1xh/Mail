@@ -219,11 +219,12 @@ export class StalwartJmapClient {
       throw new ExternalServiceError("Unexpected JMAP response for Email/changes");
     }
 
+    const data = result[1] as Record<string, string[] | string>;
     return {
-      created: result[1].created ?? [],
-      updated: result[1].updated ?? [],
-      destroyed: result[1].destroyed ?? [],
-      newState: result[1].newState,
+      created: (data.created as string[]) ?? [],
+      updated: (data.updated as string[]) ?? [],
+      destroyed: (data.destroyed as string[]) ?? [],
+      newState: data.newState as string,
     };
   }
 
@@ -267,8 +268,9 @@ export class StalwartJmapClient {
       ],
     ]);
 
-    const result = response.methodResponses[0];
-    const emailData = result?.[1]?.list?.[0];
+    const result = response.methodResponses[0] as unknown[];
+    const resultData = result?.[1] as Record<string, any> | undefined;
+    const emailData = resultData?.list?.[0];
     if (!emailData) {
       throw new ExternalServiceError(`Email ${emailId} not found in JMAP response`);
     }
@@ -325,13 +327,13 @@ export class StalwartJmapClient {
       (r: unknown[]) => r[2] === "1"
     );
 
-    const emails = (getResult?.[1]?.list ?? []).map(
+    const emails = (((getResult?.[1] as Record<string, any>)?.list) ?? []).map(
       (e: Record<string, unknown>) => this.mapToEmailSummary(e, session)
     );
 
     return {
       emails,
-      total: queryResult?.[1]?.total ?? emails.length,
+      total: ((queryResult?.[1] as Record<string, any>)?.total) ?? emails.length,
       state: session.state,
     };
   }
@@ -394,7 +396,7 @@ export class StalwartJmapClient {
     }
 
     // Build mailboxIds patch: remove from all, add to target
-    const currentMailboxIds = Object.fromEntries(
+    const currentMailboxIds: Record<string, boolean | null> = Object.fromEntries(
       Object.keys(session.mailboxes).map((id) => [`mailboxIds/${id}`, null])
     );
     currentMailboxIds[`mailboxIds/${targetMailboxId}`] = true;
