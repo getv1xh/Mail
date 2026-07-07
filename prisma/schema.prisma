@@ -1,0 +1,281 @@
+// VMailx — Prisma Schema
+// Workspace is the primary tenant. Every resource belongs to a workspace.
+// PostgreSQL full-text search indexes are added via raw SQL in migrations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Better Auth tables ──────────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  avatar        String?
+  emailVerified Boolean  @default(false)
+  globalRole    GlobalRole @default(USER)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions         Session[]
+  accounts         Account[]
+  workspaceMembers WorkspaceMember[]
+  mailboxAccess    MailboxUserAccess[]
+  createdInvitations Invitation[] @relation("InvitationCreator")
+  auditLogs        AuditLog[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  idToken               String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+// ─── Workspaces ──────────────────────────────────────────────────────────────
+
+enum GlobalRole {
+  SUPER_ADMIN
+  USER
+}
+
+enum WorkspaceStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum WorkspacePlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model Workspace {
+  id        String        @id @default(uuid())
+  name      String
+  slug      String        @unique
+  plan      WorkspacePlan @default(FREE)
+  status    WorkspaceStatus @default(ACTIVE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  members   WorkspaceMember[]
+  domains   Domain[]
+  mailboxes Mailbox[]
+  invitations Invitation[]
+  auditLogs AuditLog[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(MEMBER)
+  joinedAt    DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+model Invitation {
+  id          String   @id @default(uuid())
+  workspaceId String
+  email       String
+  role        WorkspaceRole
+  token       String   @unique
+  createdBy   String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator   User      @relation("InvitationCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@unique([email, workspaceId])
+  @@index([token])
+  @@map("invitations")
+}
+
+// ─── Audit ───────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  workspaceId String?
+  userId      String?
+  action      String
+  resource    String
+  resourceId  String?
+  details     Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+// ─── Domains ─────────────────────────────────────────────────────────────────
+
+enum DomainStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+model Domain {
+  id               String       @id @default(uuid())
+  workspaceId      String
+  domain           String       @unique
+  status           DomainStatus @default(PENDING)
+  mxRecord         String
+  spfRecord        String
+  dkimPublicKey    String       @db.Text
+  dkimPrivateKey   String       @db.Text // AES-256-GCM encrypted, base64 stored
+  dkimSelector     String       @default("mail")
+  dmarcRecord      String
+  stalwartDomainId String?
+  verifiedAt       DateTime?
+  lastCheckedAt    DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  mailboxes Mailbox[]
+
+  @@index([workspaceId])
+  @@index([status])
+  @@index([domain])
+  @@map("domains")
+}
+
+// ─── Mailboxes ───────────────────────────────────────────────────────────────
+
+model Mailbox {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  domainId       String
+  localPart      String   // "hello" in hello@example.com
+  displayName    String
+  stalwartId     String   @unique // Stalwart principal account ID
+  isActive       Boolean  @default(true)
+  storageQuotaMb Int      @default(5120) // 5 GB default
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  workspace  Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  domain     Domain              @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  aliases    MailboxAlias[]
+  userAccess MailboxUserAccess[]
+
+  @@unique([domainId, localPart])
+  @@index([workspaceId])
+  @@index([domainId])
+  @@index([stalwartId])
+  @@map("mailboxes")
+}
+
+model MailboxAlias {
+  id        String   @id @default(uuid())
+  mailboxId String
+  alias     String   @unique // full address: info@example.com
+  createdAt DateTime @default(now())
+
+  mailbox Mailbox @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+
+  @@index([mailboxId])
+  @@map("mailbox_aliases")
+}
+
+// ─── Mailbox Access Control ──────────────────────────────────────────────────
+
+enum MailboxPermission {
+  OWNER
+  SEND_AS
+  SEND_ON_BEHALF
+  READ_ONLY
+}
+
+model MailboxUserAccess {
+  id         String            @id @default(uuid())
+  mailboxId  String
+  userId     String
+  permission MailboxPermission @default(READ_ONLY)
+  grantedAt  DateTime          @default(now())
+
+  mailbox Mailbox @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([mailboxId, userId])
+  @@index([mailboxId])
+  @@index([userId])
+  @@map("mailbox_user_access")
+}
