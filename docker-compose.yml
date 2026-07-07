@@ -56,6 +56,17 @@ services:
       - stalwart
     restart: unless-stopped
 
+  # 4. Caddy Reverse Proxy (Exposes App on Port 80)
+  caddy:
+    image: caddy:2-alpine
+    container_name: vmailx-caddy
+    ports:
+      - "80:80"
+    command: caddy reverse-proxy --from :80 --to vmailx:3000
+    depends_on:
+      - vmailx
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   stalwart_data:
